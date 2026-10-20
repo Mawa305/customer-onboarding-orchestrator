@@ -1,0 +1,722 @@
+{
+  "name": "Customer Onboarding Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "customer-onboarding-orchestrator",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        432
+      ],
+      "id": "2c7a5cf1-ab47-4ad0-903e-560ce8abb07a",
+      "name": "Webhook",
+      "webhookId": "a7564089-ef6b-435a-803c-ae9a67c9393d"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer details:\n{{ JSON.stringify($json.body) }}\n\nClassify this customer and return the JSON.",
+        "options": {
+          "systemMessage": "You are a customer onboarding supervisor for an AI automation agency.\nClassify each incoming customer into exactly one route:\n- \"individual\": a single person with a simple need\n- \"small_business\": a local business with a few staff or locations\n- \"enterprise\": a large company, multiple departments, or a complex or high-value need\n\nRules:\n- Use only the information provided. Do not invent details.\n- If the company field is empty or unclear, prefer \"individual\" unless the message clearly describes a business.\n- Return only valid JSON in this exact format, with no extra text and no markdown:\n{\"route\": \"individual\" | \"small_business\" | \"enterprise\", \"reason\": \"one short line explaining why\"}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        432
+      ],
+      "id": "a07d800a-f107-4f30-9cd5-9028c58f3391",
+      "name": "Supervisor Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        296,
+        648
+      ],
+      "id": "1398a0e3-16da-4065-b8b5-322ca658e9ce",
+      "name": "Supervisor Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HrOIZ7je9iVQ9F2r",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output.replace(/```json|```/g, '').trim();\nconst parsed = JSON.parse(raw);\nconst customer = $('Webhook').first().json.body;\n\nreturn [{ json: { ...customer, route: parsed.route, reason: parsed.reason } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        432
+      ],
+      "id": "5badeee9-1e6f-4608-a658-d33e1a975efd",
+      "name": "Parse Route"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "individual",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "61e5d12e-1ff1-4b56-ae4e-585b40b57c87"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Individual"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ba32e0bc-0791-4a2c-b984-d2ce33259caf",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "small_business",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Small Business"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "996616af-bb8c-47a6-a1fc-b16b33a658a3",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "enterprise",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Enterprise"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        416
+      ],
+      "id": "cd1db782-6817-423f-be46-88b38dd3bc6d",
+      "name": "Route Customer"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer name: {{ $json.name }}\nTheir need: {{ $json.message }}\n\nWrite the welcome email JSON for this customer.",
+        "options": {
+          "systemMessage": "You write warm, short welcome emails for new individual customers of an AI automation agency.\nWrite in a friendly, professional tone. Keep the email under 120 words.\nUse only the details provided. Do not promise specific results or prices.\nReturn only valid JSON in this exact format, with no extra text and no markdown:\n{\"subject\": \"email subject line\", \"body\": \"email body text\"}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1024,
+        -80
+      ],
+      "id": "7cba5975-9e5a-4f8a-9829-bf281659c429",
+      "name": "Welcome Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1096,
+        152
+      ],
+      "id": "7be89637-b040-4044-9a8a-1e8eedfe03bb",
+      "name": "Welcome Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HrOIZ7je9iVQ9F2r",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output.replace(/```json|```/g, '').trim();\nconst email = JSON.parse(raw);\nconst customer = $('Parse Route').first().json;\n\nreturn [{\n  json: {\n    name: customer.name,\n    email: customer.email,\n    subject: email.subject,\n    body: email.body\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        224
+      ],
+      "id": "bc014614-1292-4066-8dd0-edb5f1624a8b",
+      "name": "Parse Welcome Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        224
+      ],
+      "id": "9cf0710d-524e-442b-96fc-638ade4d6616",
+      "name": "Send Welcome Email",
+      "webhookId": "0e6cec5c-1fc7-4115-b940-d30c640eea37",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "D5RnP12Tu486Lr6x",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "customers",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $('Parse Welcome Email').item.json.name }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $('Parse Welcome Email').item.json.email }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $('Webhook').item.json.body.phone }}"
+            },
+            {
+              "fieldId": "company",
+              "fieldValue": "={{ $('Webhook').item.json.body.company }}"
+            },
+            {
+              "fieldId": "route",
+              "fieldValue": "={{ $('Parse Route').item.json.route }}"
+            },
+            {
+              "fieldId": "reason",
+              "fieldValue": "={{ $('Parse Route').item.json.reason }}"
+            },
+            {
+              "fieldId": "welcome_subject",
+              "fieldValue": "={{ $('Parse Welcome Email').item.json.subject }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        224
+      ],
+      "id": "7e774396-12cb-4339-9a0b-50428e4910b3",
+      "name": "Save Customer",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6r7hjjJWwhuvSsoI",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "=New customer onboarded ✅\nName: {{ $('Parse Welcome Email').item.json.name }} \nEmail: {{ $('Parse Welcome Email').item.json.email }}\nRoute: {{ $('Parse Route').item.json.route.replace(/_/g, ' ') }}\nReason: {{ $('Parse Route').item.json.reason }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2048,
+        224
+      ],
+      "id": "73279c5b-76db-4dbc-b83a-ed021ce7654d",
+      "name": "Notify Team",
+      "webhookId": "33b22131-da29-4f29-ac5d-2fba10da31ef",
+      "credentials": {
+        "telegramApi": {
+          "id": "F5fheWhQ9gaok1kW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"success\",\n  \"message\": \"Customer onboarded successfully\",\n  \"route\": \"{{ $('Parse Route').item.json.route }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2272,
+        224
+      ],
+      "id": "30fe4b4d-de5e-4e2e-85f4-c37c90c23e96",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "88ea6c4c-0202-467b-ba14-8d2b79f6f766",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1376,
+        768
+      ],
+      "id": "232f6a17-9571-4397-9b91-b3c46b1c7caa",
+      "name": "Check Decision"
+    },
+    {
+      "parameters": {
+        "tableId": "customers",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $('Parse Route').item.json.name }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $('Webhook').item.json.body.email }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $('Webhook').item.json.body.phone }}"
+            },
+            {
+              "fieldId": "company",
+              "fieldValue": "={{ $('Webhook').item.json.body.company }}"
+            },
+            {
+              "fieldId": "route",
+              "fieldValue": "={{ $('Parse Route').item.json.route }}"
+            },
+            {
+              "fieldId": "reason",
+              "fieldValue": "={{ $('Parse Route').item.json.reason }}"
+            },
+            {
+              "fieldId": "welcome_subject",
+              "fieldValue": "Not sent (enterprise approval pending)"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        672
+      ],
+      "id": "bcc67eeb-612c-476b-8747-ab8dbbf60f31",
+      "name": "Save Enterprise Customer",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6r7hjjJWwhuvSsoI",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "Enterprise customer request was rejected.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1600,
+        864
+      ],
+      "id": "c2306084-e64f-48c7-a6b7-41897a6a0249",
+      "name": "Notify Rejection",
+      "webhookId": "f45c5544-c56c-4d2e-99d8-f94d8770b714",
+      "credentials": {
+        "telegramApi": {
+          "id": "F5fheWhQ9gaok1kW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "YOUR_CHAT_ID",
+        "message": "=Enterprise customer received, approval required.\nName: {{ $('Parse Route').item.json.name }}\nCompany: {{ $('Webhook').item.json.body.company }}\nReason: {{ $('Parse Route').item.json.reason }}\nDo you approve?",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        768
+      ],
+      "id": "bbff5646-03f3-4fbc-89bb-a80aa56f1196",
+      "name": "Request Approval",
+      "webhookId": "4371fc69-0694-400a-9389-520030162693",
+      "credentials": {
+        "telegramApi": {
+          "id": "F5fheWhQ9gaok1kW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer name: {{ $json.name }}\nCompany: {{ $json.company }}\nTheir need: {{ $json.message }}\n\nWrite the welcome email JSON for this customer.",
+        "options": {
+          "systemMessage": "You write professional welcome emails for new small business customers of an AI automation agency.\nWrite in a warm but professional tone. Mention that the team will help automate their business processes.\nKeep the email under 150 words.\nUse only the details provided. Do not promise specific results or prices.\nReturn only valid JSON in this exact format, with no extra text and no markdown:\n{\"subject\": \"email subject line\", \"body\": \"email body text\"}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1024,
+        320
+      ],
+      "id": "40546b3e-d9d2-45b9-9429-e892a8e0a390",
+      "name": "Business Welcome Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1096,
+        552
+      ],
+      "id": "95575995-aee9-4405-a3e5-075d091982c5",
+      "name": "Business Welcome Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HrOIZ7je9iVQ9F2r",
+          "name": "OpenAI account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Supervisor Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supervisor Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Supervisor Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supervisor Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Route": {
+      "main": [
+        [
+          {
+            "node": "Route Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Customer": {
+      "main": [
+        [
+          {
+            "node": "Welcome Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Business Welcome Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Welcome Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Save Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Customer": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Decision": {
+      "main": [
+        [
+          {
+            "node": "Save Enterprise Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Approval": {
+      "main": [
+        [
+          {
+            "node": "Check Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Welcome Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Business Welcome Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Welcome Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "64ae20f9-0d4f-4a78-8219-c23ac371a94a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8de48fd8bab4d8303aced0753829a7348e2021001c499afd35e0126724b9890c"
+  },
+  "nodeGroups": [],
+  "id": "9EYSO8dzICdzzJ1w",
+  "tags": []
+}
